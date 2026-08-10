@@ -1,0 +1,306 @@
+import os
+import re
+import sqlite3
+from contextlib import contextmanager
+from datetime import date, time
+from pathlib import Path
+import httpx
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field, field_validator
+
+BASE_DIR = Path(__file__).resolve().parent
+
+
+def carregar_arquivo_env(caminho: Path) -> None:
+    if not caminho.exists():
+        return
+    for linha in caminho.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith("#") or "=" not in linha:
+            continue
+        chave, valor = linha.split("=", 1)
+        os.environ.setdefault(chave.strip(), valor.strip().strip('"').strip("'"))
+
+
+carregar_arquivo_env(BASE_DIR / ".env")
+DATABASE_PATH = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "banco.db")))
+EVOLUTION_URL = os.getenv("EVOLUTION_URL", "http://localhost:8080").rstrip("/")
+EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY")
+INSTANCE_NAME = os.getenv("EVOLUTION_INSTANCE_NAME", "agenda")
+MANICURE_NUMERO = os.getenv("MANICURE_NUMERO", "")
+ALLOWED_ORIGINS = [
+    origem.strip()
+    for origem in os.getenv(
+        "ALLOWED_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000"
+    ).split(",")
+    if origem.strip()
+]
+
+app = FastAPI(title="Agendamento de Serviços")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class ServicoCreate(BaseModel):
+    nome: str = Field(min_length=1, max_length=100)
+    descricao: str = Field(default="", max_length=500)
+    preco: float = Field(ge=0)
+    duracao_minutos: int = Field(gt=0, le=600)
+
+
+class AgendamentoCreate(BaseModel):
+    nome_cliente: str = Field(min_length=1, max_length=100)
+    contato: str = Field(min_length=8, max_length=30)
+    servico_id: int = Field(gt=0)
+    data: date
+    horario: time
+
+    @field_validator("nome_cliente", "contato")
+    @classmethod
+    def texto_obrigatorio(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Campo obrigatório")
+        return value
+
+    @field_validator("horario")
+    @classmethod
+    def validar_intervalo(cls, value: time) -> time:
+        if value.second or value.microsecond or value.minute not in (0, 30):
+            raise ValueError("Horário deve estar em intervalos de 30 minutos")
+        return value
+
+
+def normalizar_telefone(contato: str) -> str:
+    numeros = re.sub(r"\D", "", contato)
+    return numeros if numeros.startswith("55") else f"55{numeros}"
+
+
+def enviar_whatsapp(numero: str, mensagem: str) -> None:
+    """Envia uma mensagem sem interromper o agendamento se a Evolution falhar."""
+    if not EVOLUTION_API_KEY:
+        print("[WhatsApp] EVOLUTION_API_KEY não configurada; envio ignorado.")
+        return
+    try:
+        resposta = httpx.post(
+            f"{EVOLUTION_URL}/message/sendText/{INSTANCE_NAME}",
+            json={"number": normalizar_telefone(numero), "text": mensagem},
+            headers={"apikey": EVOLUTION_API_KEY},
+            timeout=10,
+        )
+        resposta.raise_for_status()
+    except httpx.HTTPStatusError as erro:
+        print(
+            f"[WhatsApp] Evolution respondeu {erro.response.status_code}: "
+            f"{erro.response.text}"
+        )
+    except httpx.HTTPError as erro:
+        print(f"[WhatsApp] Falha de conexão: {erro}")
+
+
+def get_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(DATABASE_PATH, timeout=10, isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 10000")
+    return conn
+
+
+@contextmanager
+def db_connection():
+    conn = get_conn()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def criar_tabelas() -> None:
+    with db_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS servicos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                descricao TEXT,
+                preco REAL NOT NULL,
+                duracao_minutos INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agendamentos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome_cliente TEXT NOT NULL,
+                contato TEXT NOT NULL,
+                servico_id INTEGER NOT NULL,
+                data TEXT NOT NULL,
+                horario TEXT NOT NULL,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (servico_id) REFERENCES servicos(id)
+            )
+            """
+        )
+        if conn.execute("SELECT COUNT(*) FROM servicos").fetchone()[0] == 0:
+            conn.executemany(
+                "INSERT INTO servicos (nome, descricao, preco, duracao_minutos) VALUES (?, ?, ?, ?)",
+                [
+                    ("Manicure clássica", "Lixamento, cutículas e esmaltação tradicional.", 35.0, 40),
+                    ("Esmaltação em gel", "Brilho e durabilidade de até três semanas.", 60.0, 60),
+                    ("Nail art floral", "Desenhos delicados feitos à mão, sob medida.", 80.0, 75),
+                    ("Spa das mãos", "Esfoliação, máscara e massagem relaxante.", 50.0, 50),
+                ],
+            )
+
+
+criar_tabelas()
+
+
+def horario_para_minutos(horario: str) -> int:
+    horas, minutos = map(int, horario.split(":"))
+    return horas * 60 + minutos
+
+
+def gerar_horarios(inicio: str, fim: str, intervalo: int = 30) -> list[str]:
+    return [
+        f"{minuto // 60:02d}:{minuto % 60:02d}"
+        for minuto in range(horario_para_minutos(inicio), horario_para_minutos(fim), intervalo)
+    ]
+
+
+def buscar_horarios_disponiveis(
+    conn: sqlite3.Connection, data_agendamento: date, servico_id: int
+) -> list[str]:
+    servico = conn.execute(
+        "SELECT duracao_minutos FROM servicos WHERE id = ?", (servico_id,)
+    ).fetchone()
+    if not servico:
+        return []
+    agendamentos = conn.execute(
+        """
+        SELECT a.horario, s.duracao_minutos
+        FROM agendamentos AS a JOIN servicos AS s ON a.servico_id = s.id
+        WHERE a.data = ?
+        """,
+        (data_agendamento.isoformat(),),
+    ).fetchall()
+    duracao = servico["duracao_minutos"]
+    fim_expediente = horario_para_minutos("18:00")
+    livres = []
+    for horario in gerar_horarios("08:00", "18:00"):
+        inicio = horario_para_minutos(horario)
+        fim = inicio + duracao
+        conflita = any(
+            inicio < horario_para_minutos(item["horario"]) + item["duracao_minutos"]
+            and fim > horario_para_minutos(item["horario"])
+            for item in agendamentos
+        )
+        if not conflita and fim <= fim_expediente:
+            livres.append(horario)
+    return livres
+
+
+@app.get("/")
+def home():
+    return FileResponse(BASE_DIR / "home.html")
+
+
+@app.post("/cadastrar_servico", status_code=201)
+def cadastrar_servico(servico: ServicoCreate):
+    with db_connection() as conn:
+        cursor = conn.execute(
+            "INSERT INTO servicos (nome, descricao, preco, duracao_minutos) VALUES (?, ?, ?, ?)",
+            (servico.nome.strip(), servico.descricao.strip(), servico.preco, servico.duracao_minutos),
+        )
+    return {"id": cursor.lastrowid, "mensagem": "Serviço cadastrado com sucesso!"}
+
+
+@app.get("/servicos")
+def listar_servicos():
+    with db_connection() as conn:
+        return [dict(row) for row in conn.execute("SELECT * FROM servicos ORDER BY id")]
+
+
+@app.get("/horarios-disponiveis")
+def horarios_disponiveis(data: date, servico_id: int):
+    if data < date.today():
+        raise HTTPException(status_code=400, detail="Não é possível consultar horários no passado")
+    with db_connection() as conn:
+        return {"disponiveis": buscar_horarios_disponiveis(conn, data, servico_id)}
+
+
+@app.post("/agendamentos", status_code=201)
+def criar_agendamento(agendamento: AgendamentoCreate):
+    if agendamento.data < date.today():
+        raise HTTPException(status_code=400, detail="Não é possível agendar no passado")
+    horario = agendamento.horario.strftime("%H:%M")
+    conn = get_conn()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        if horario not in buscar_horarios_disponiveis(conn, agendamento.data, agendamento.servico_id):
+            raise HTTPException(status_code=409, detail="Horário indisponível")
+        cursor = conn.execute(
+            """
+            INSERT INTO agendamentos (nome_cliente, contato, servico_id, data, horario)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (agendamento.nome_cliente, agendamento.contato, agendamento.servico_id,
+             agendamento.data.isoformat(), horario),
+        )
+        nome_servico = conn.execute(
+            "SELECT nome FROM servicos WHERE id = ?", (agendamento.servico_id,)
+        ).fetchone()["nome"]
+        conn.commit()
+    except HTTPException:
+        conn.rollback()
+        raise
+    except sqlite3.Error as erro:
+        conn.rollback()
+        raise HTTPException(status_code=503, detail="Não foi possível concluir o agendamento") from erro
+    finally:
+        conn.close()
+
+    mensagem = (
+        f"Olá, {agendamento.nome_cliente}! Seu agendamento de {nome_servico} "
+        f"foi confirmado para {agendamento.data:%d/%m/%Y} às {horario}. 💅"
+    )
+    enviar_whatsapp(agendamento.contato, mensagem)
+
+    if MANICURE_NUMERO:
+        mensagem_manicure = (
+            "💅 Novo agendamento!\n\n"
+            f"Cliente: {agendamento.nome_cliente}\n"
+            f"Telefone: {agendamento.contato}\n"
+            f"Serviço: {nome_servico}\n"
+            f"Data: {agendamento.data:%d/%m/%Y}\n"
+            f"Horário: {horario}"
+        )
+        enviar_whatsapp(MANICURE_NUMERO, mensagem_manicure)
+    else:
+        print("[WhatsApp] MANICURE_NUMERO não configurado; aviso à manicure ignorado.")
+
+    return {"id": cursor.lastrowid, "mensagem": "Agendamento salvo com sucesso!"}
+
+
+@app.get("/agendamentos")
+def listar_agendamentos():
+    with db_connection() as conn:
+        return [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT a.id, a.nome_cliente, a.contato, a.data, a.horario, a.criado_em,
+                       s.nome AS servico
+                FROM agendamentos AS a JOIN servicos AS s ON a.servico_id = s.id
+                ORDER BY a.data, a.horario
+                """
+            )
+        ]

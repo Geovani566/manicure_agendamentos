@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agendamento · Florescer Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,500&family=Work+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cream: #FBF3EA;
+      --blush: #E9C7B9;
+      --terracotta: #C97B58;
+      --plum: #4F2F3D;
+      --sage: #94A584;
+      --ink: #3A2C28;
+      --paper: #FFFCF8;
+      --line: rgba(79, 47, 61, 0.14);
+      --radius-organic: 38% 62% 58% 42% / 48% 40% 60% 52%;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Work Sans', sans-serif;
+      background: var(--cream);
+      color: var(--ink);
+      padding: 48px 24px 64px;
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3 {
+      font-family: 'Fraunces', serif;
+      font-weight: 500;
+      color: var(--plum);
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: var(--radius-organic);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      width: 380px; height: 380px;
+      background: var(--blush);
+      top: -110px; right: -100px;
+      opacity: .55;
+    }
+    body::after {
+      width: 220px; height: 220px;
+      background: var(--sage);
+      bottom: -70px; left: -70px;
+      opacity: .35;
+    }
+
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      gap: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .page-header .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12.5px; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--terracotta); font-weight: 600; margin-bottom: 14px;
+    }
+    .page-header .eyebrow::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--terracotta); display: inline-block;
+    }
+    .page-header h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.1; }
+    .page-header p {
+      color: var(--plum); opacity: .7; font-size: 16px; line-height: 1.6;
+      margin: 14px auto 0; max-width: 460px;
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 34px 36px;
+      box-shadow: 0 16px 48px -24px rgba(58, 44, 40, .18);
+    }
+    .card-head {
+      display: flex; align-items: flex-start; gap: 14px;
+      margin-bottom: 26px;
+    }
+    .card-icon {
+      width: 42px; height: 42px; flex-shrink: 0;
+      border-radius: 14px;
+      background: var(--cream);
+      border: 1.5px solid var(--line);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .card-icon svg { width: 20px; height: 20px; stroke: var(--terracotta); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .card-head h2 { font-size: 21px; margin-bottom: 4px; }
+    .card-head p { font-size: 14px; color: var(--plum); opacity: .65; margin: 0; line-height: 1.5; }
+    .section-tag {
+      font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--sage); font-weight: 600; margin-bottom: 4px;
+    }
+
+    /* serviços */
+    .services-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    }
+    .service-item {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 20px 20px 20px 24px;
+      background: var(--cream);
+      transition: transform .25s ease, box-shadow .25s ease;
+      position: relative; overflow: hidden;
+    }
+    .service-item:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 18px 36px -20px rgba(79, 47, 61, .35);
+    }
+    .service-item::before {
+      content: '';
+      position: absolute; top: 0; left: 0;
+      width: 4px; height: 100%;
+      background: linear-gradient(180deg, var(--terracotta), var(--blush));
+    }
+    .service-item strong {
+      display: block; margin-bottom: 6px;
+      font-family: 'Fraunces', serif; font-size: 16px; color: var(--plum);
+    }
+    .desc { font-size: 13.5px; color: var(--plum); opacity: .7; line-height: 1.5; margin-bottom: 10px; }
+    .service-meta { font-size: 13px; color: var(--plum); opacity: .65; display: flex; gap: 14px; flex-wrap: wrap; }
+    .service-meta .price {
+      color: var(--terracotta); font-weight: 600; font-style: italic;
+      font-family: 'Fraunces', serif; font-size: 14px; opacity: 1;
+    }
+
+    /* formulário */
+    form { display: grid; gap: 16px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    label {
+      font-size: 13px; font-weight: 600; letter-spacing: .02em;
+      color: var(--plum); display: flex; flex-direction: column; gap: 8px;
+    }
+
+    input, select {
+      padding: 13px 16px;
+      border-radius: 14px;
+      border: 1.5px solid var(--line);
+      background: var(--cream);
+      font-family: 'Work Sans', sans-serif;
+      font-size: 15px;
+      color: var(--ink);
+      transition: border-color .2s ease, background .2s ease;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--terracotta);
+      background: var(--paper);
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234F2F3D' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      padding-right: 40px;
+      cursor: pointer;
+    }
+
+    button[type="submit"] {
+      background: var(--plum);
+      color: var(--paper);
+      border: none;
+      border-radius: 30px;
+      padding: 15px 32px;
+      font-family: 'Work Sans', sans-serif;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      transition: background .2s ease, transform .2s ease, box-shadow .2s ease;
+      box-shadow: 0 10px 24px -10px rgba(79, 47, 61, .55);
+      justify-self: start;
+    }
+    button[type="submit"]:hover {
+      background: var(--terracotta);
+      transform: translateY(-2px);
+    }
+    button[type="submit"]:disabled { opacity: .55; cursor: wait; transform: none; }
+
+    .message {
+      padding: 14px 18px;
+      border-radius: 14px;
+      display: none;
+      font-size: 14px; line-height: 1.5; font-weight: 500;
+    }
+    .message.success {
+      display: block;
+      background: #EAF1E3; color: #4C6B3A; border: 1px solid #b6d9a0;
+    }
+    .message.error {
+      display: block;
+      background: #F6E3DC; color: #9C4A2E; border: 1px solid #e5b8a8;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 28px 16px 48px; }
+      .card { padding: 24px 20px; border-radius: 22px; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+
+    <div class="page-header">
+      <div class="eyebrow">Florescer Studio</div>
+      <h1>Agende seu horário.</h1>
+      <p>Escolha um serviço, defina a data e veja os horários disponíveis.</p>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/><path d="M19 15l.75 2.25L22 18l-2.25.75L19 21l-.75-2.25L16 18l2.25-.75z"/><path d="M5 15l.75 2.25L8 18l-2.25.75L5 21l-.75-2.25L2 18l2.25-.75z"/></svg>
+        </div>
+        <div>
+          <div class="section-tag">Catálogo</div>
+          <h2>Nossos serviços</h2>
+          <p>Todos incluem preparo das cutículas e hidratação.</p>
+        </div>
+      </div>
+      <div id="listaServicos" class="services-grid"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="8" y2="18"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+        </div>
+        <div>
+          <div class="section-tag">Agendamento</div>
+          <h2>Solicitar horário</h2>
+          <p>Respondemos rápido para confirmar sua visita.</p>
+        </div>
+      </div>
+
+      <div id="statusMessage" class="message"></div>
+
+      <form id="formAgendamento">
+        <div class="form-grid">
+          <label>
+            Nome completo
+            <input type="text" id="nomeCliente" name="nomeCliente" placeholder="Como podemos te chamar?" required />
+          </label>
+          <label>
+            Telefone / Contato
+            <input type="text" id="contato" name="contato" placeholder="(48) 99999-0000" required />
+          </label>
+        </div>
+
+        <label>
+          Serviço
+          <select id="servico" name="servico" required></select>
+        </label>
+
+        <div class="form-grid">
+          <label>
+            Data
+            <input type="date" id="data" name="data" required />
+          </label>
+          <label>
+            Horário disponível
+            <select id="horario" name="horario" required></select>
+          </label>
+        </div>
+
+        <button type="submit" id="btnSubmit">Confirmar agendamento</button>
+      </form>
+    </section>
+
+  </main>
+
+  <script>
+    const listaServicos = document.getElementById('listaServicos');
+    const form = document.getElementById('formAgendamento');
+    const selectServico = document.getElementById('servico');
+    const selectHorario = document.getElementById('horario');
+    const inputData = document.getElementById('data');
+    const statusMessage = document.getElementById('statusMessage');
+    const btnSubmit = document.getElementById('btnSubmit');
+    // URLs relativas funcionam localmente e após a publicação no mesmo domínio.
+    const API_BASE = '';
+
+    function mostrarMensagem(texto, tipo = 'success') {
+      statusMessage.textContent = texto;
+      statusMessage.className = `message ${tipo}`;
+    }
+
+    async function carregarServicos() {
+      try {
+        const resposta = await fetch(`${API_BASE}/servicos`);
+        if (!resposta.ok) {
+          throw new Error('Erro ao carregar os serviços');
+        }
+
+        const servicos = await resposta.json();
+        selectServico.innerHTML = '<option value="">Selecione...</option>';
+        listaServicos.innerHTML = '';
+
+        if (!servicos.length) {
+          listaServicos.innerHTML = '<p style="color:var(--plum);opacity:.6;">Nenhum serviço disponível no momento.</p>';
+          return;
+        }
+
+        servicos.forEach((servico) => {
+          const option = document.createElement('option');
+          option.value = servico.id;
+          option.textContent = servico.nome;
+          selectServico.appendChild(option);
+
+          const card = document.createElement('article');
+          card.className = 'service-item';
+          const nome = document.createElement('strong');
+          nome.textContent = servico.nome;
+          const descricao = document.createElement('div');
+          descricao.className = 'desc';
+          descricao.textContent = servico.descricao;
+          const meta = document.createElement('div');
+          meta.className = 'service-meta';
+          const preco = document.createElement('span');
+          preco.className = 'price';
+          preco.textContent = `R$ ${Number(servico.preco).toFixed(2).replace('.', ',')}`;
+          const duracao = document.createElement('span');
+          duracao.textContent = `${servico.duracao_minutos} min`;
+          meta.append(preco, duracao);
+          card.append(nome, descricao, meta);
+          listaServicos.appendChild(card);
+        });
+      } catch (erro) {
+        mostrarMensagem('Não foi possível carregar os serviços.', 'error');
+      }
+    }
+
+    async function carregarHorarios() {
+      const servicoId = selectServico.value;
+      const data = inputData.value;
+      selectHorario.innerHTML = '<option value="">Carregando...</option>';
+
+      if (!servicoId || !data) {
+        selectHorario.innerHTML = '<option value="">Selecione serviço e data</option>';
+        return;
+      }
+
+      try {
+        const parametros = new URLSearchParams({ data, servico_id: servicoId });
+        const resposta = await fetch(`${API_BASE}/horarios-disponiveis?${parametros}`);
+        if (!resposta.ok) {
+          throw new Error('Erro ao carregar horários');
+        }
+        const dados = await resposta.json();
+
+        if (!dados.disponiveis.length) {
+          selectHorario.innerHTML = '<option value="">Nenhum horário disponível</option>';
+          return;
+        }
+
+        selectHorario.innerHTML = '<option value="">Selecione um horário</option>';
+        dados.disponiveis.forEach((horario) => {
+          const option = document.createElement('option');
+          option.value = horario;
+          option.textContent = horario;
+          selectHorario.appendChild(option);
+        });
+      } catch (erro) {
+        selectHorario.innerHTML = '<option value="">Erro ao carregar horários</option>';
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = 'Agendando...';
+
+      const payload = {
+        nome_cliente: document.getElementById('nomeCliente').value,
+        contato: document.getElementById('contato').value,
+        servico_id: Number(selectServico.value),
+        data: inputData.value,
+        horario: selectHorario.value,
+      };
+
+      try {
+        const resposta = await fetch(`${API_BASE}/agendamentos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+          throw new Error(dados.detail || 'Erro ao salvar agendamento');
+        }
+
+        mostrarMensagem(`Agendamento salvo com sucesso! ID: ${dados.id}`, 'success');
+        form.reset();
+        selectHorario.innerHTML = '<option value="">Selecione serviço e data</option>';
+      } catch (erro) {
+        mostrarMensagem(erro.message, 'error');
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Confirmar agendamento';
+      }
+    });
+
+    selectServico.addEventListener('change', carregarHorarios);
+    inputData.addEventListener('change', carregarHorarios);
+    const hoje = new Date();
+const ano = hoje.getFullYear();
+const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+const dia = String(hoje.getDate()).padStart(2, "0");
+
+inputData.min = `${ano}-${mes}-${dia}`;
+
+    carregarServicos();
+  </script>
+</body>
+</html>
